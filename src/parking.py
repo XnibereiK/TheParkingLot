@@ -3,7 +3,7 @@
 from __future__ import annotations
 import copy
 from typing import Optional, Dict, Set
-
+from abc import ABC, abstractmethod
 
 class ParkingLot:
     """Represents a parking lot with multiple parking spots."""
@@ -62,7 +62,7 @@ class ParkingLot:
             raise ValueError(f"Invalid spot ID: {spot_id}. The spot does not exist.")
         return self.parking_spots[spot_id]
 
-    def add_spot(self, spot_id: int) -> Optional[ParkingSpot]:
+    def add_spot(self, spot_id: int, spot_type: str = "standard") -> Optional[ParkingSpot]:
         """Add a parking spot to the lot.
 
         Args:
@@ -80,10 +80,17 @@ class ParkingLot:
         if spot_id in self.parking_spots:
             return None  # Spot already exists
 
-        spot = ParkingSpot(spot_id)
+        if spot_type == "standard":
+            spot = StandardParkingSpot(spot_id)
+        elif spot_type == "electric":
+            spot = ElectricVehicleParkingSpot(spot_id)
+        else:
+            raise ValueError(f"Unknown parking spot type: {spot_type}")
+
         self.parking_spots[spot_id] = spot
         self.available_spots.add(spot_id)
         return spot
+
 
     def take_snapshot(self) -> Dict[int, ParkingSpot]:
         """Take a deep copy snapshot of the current parking lot state.
@@ -167,61 +174,6 @@ class ParkingLot:
         self._free_spot(spot)
 
 
-class ParkingSpot:
-    """Represents an individual parking spot."""
-
-    def __init__(self, spot_id: int) -> None:
-        """Initialize a parking spot.
-
-        Args:
-            spot_id (int): The unique identifier of the parking spot.
-        """
-        self.vehicle: Optional[Vehicle] = None
-        self.spot_id = spot_id
-
-    def __repr__(self) -> str:
-        """Return a string representation of the parking spot."""
-        return f"PS# {self.spot_id}"
-
-    @property
-    def is_available(self) -> bool:
-        """Check if the parking spot is available.
-
-        Returns:
-            bool: True if the spot is available, False otherwise.
-        """
-        return self.vehicle is None
-
-    def park_vehicle(self, vehicle: Vehicle) -> None:
-        """Park a vehicle in the parking spot.
-
-        Args:
-            vehicle (Vehicle): The vehicle to be parked.
-
-        Raises:
-            TypeError: If the argument is not an instance of Vehicle.
-            ValueError: If the parking spot is already occupied.
-        """
-        if not isinstance(vehicle, Vehicle):
-            raise TypeError("Expected a Vehicle instance.")
-
-        if not self.is_available:
-            raise ValueError(f"Spot {self.spot_id} is already occupied.")
-
-        self.vehicle = vehicle
-
-    def unpark_vehicle(self) -> None:
-        """Remove the vehicle from the parking spot.
-
-        Raises:
-            RuntimeError: If the parking spot is already empty.
-        """
-        if self.is_available:
-            raise RuntimeError(f"Spot {self.spot_id} is already empty.")
-
-        self.vehicle = None
-
-
 class Vehicle:
     """Represents a vehicle that can be parked in the parking lot."""
 
@@ -273,3 +225,101 @@ class Vehicle:
         if not isinstance(other, Vehicle):
             raise TypeError("Only Vehicle instances can be compared.")
         return self.vehicle_id == other.vehicle_id
+
+
+class BaseParkingSpot(ABC):
+    """Abstract base class for a parking spot."""
+
+    def __init__(self, spot_id: int) -> None:
+        """
+        Initialize a parking spot.
+
+        Args:
+            spot_id (int): Unique identifier for the spot.
+        """
+        self.spot_id = spot_id
+        self.vehicle = None
+
+    def __repr__(self) -> str:
+        """Return a string in the format 'PS# <spot_id>'."""
+        return f"PS# {self.spot_id}"
+
+    @property
+    def is_available(self) -> bool:
+        """Return True if no vehicle is parked."""
+        return self.vehicle is None
+
+    @abstractmethod
+    def park_vehicle(self, vehicle: Vehicle) -> None:
+        """
+        Park a vehicle in the spot.
+
+        Must be implemented by subclasses.
+        """
+        pass
+
+    def unpark_vehicle(self) -> None:
+        """
+        Remove the parked vehicle.
+
+        Raises:
+            RuntimeError: If the spot is already empty.
+        """
+        if self.is_available:
+            raise RuntimeError(f"Spot {self.spot_id} is already empty")
+        self.vehicle = None
+
+
+class StandardParkingSpot(BaseParkingSpot):
+    """A standard parking spot for any vehicle."""
+
+    def park_vehicle(self, vehicle: Vehicle) -> None:
+        """
+        Park a vehicle if the spot is free.
+
+        Args:
+            vehicle (Vehicle): The vehicle to park.
+
+        Raises:
+            TypeError: If the vehicle is not a Vehicle instance.
+            ValueError: If the spot is occupied.
+        """
+        if not isinstance(vehicle, Vehicle):
+            raise TypeError("Expected a Vehicle instance.")
+        if not self.is_available:
+            raise ValueError(f"Spot {self.spot_id} is already occupied.")
+        self.vehicle = vehicle
+
+
+class ElectricVehicleParkingSpot(BaseParkingSpot):
+    """A parking spot for electric vehicles with an optional charging port."""
+
+    def __init__(self, spot_id: int, charging_port: bool = True) -> None:
+        """
+        Initialize an electric vehicle parking spot.
+
+        Args:
+            spot_id (int): Unique identifier.
+            charging_port (bool, optional): Indicates presence of a charging port. Defaults to True.
+        """
+        super().__init__(spot_id)
+        self.charging_port = charging_port
+
+    def park_vehicle(self, vehicle: Vehicle) -> None:
+        """
+        Park an electric vehicle.
+
+        Args:
+            vehicle (Vehicle): The vehicle to park.
+
+        Raises:
+            TypeError: If not a Vehicle instance.
+            ValueError: If the vehicle is not electric or the spot is occupied.
+        """
+        if not isinstance(vehicle, Vehicle):
+            raise TypeError("Expected a Vehicle instance.")
+        if vehicle.vehicle_type != "electric":
+            raise ValueError(f"Spot {self.spot_id} supports only electric vehicles.")
+        if not self.is_available:
+            raise ValueError(f"Spot {self.spot_id} is already occupied.")
+        self.vehicle = vehicle
