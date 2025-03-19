@@ -174,5 +174,59 @@ class TestParkingLot(unittest.TestCase):
         self.assertIn("already empty", str(context.exception))
 
 
+class TestParkingLotCallbacks(unittest.TestCase):
+    """Test callback functionality in the ParkingLot class."""
+
+    def setUp(self):
+        """Set up a parking lot with one standard spot and an empty callback log."""
+        self.lot = ParkingLot()
+        self.lot.add_spot(1)
+        self.vehicle = Vehicle("CB001", "Sedan", "Honda", "Civic", "Blue")
+        self.callback_results = []
+
+    def callback_vehicle_parked(self, vehicle: Vehicle, spot):
+        """Callback for vehicle parked event."""
+        self.callback_results.append(("vehicle_parked", vehicle.vehicle_id, spot.spot_id))
+
+    def callback_vehicle_unparked(self, vehicle_id: str, spot):
+        """Callback for vehicle unparked event."""
+        self.callback_results.append(("vehicle_unparked", vehicle_id, spot.spot_id))
+
+    def callback_spot_freed(self, spot):
+        """Callback for spot freed event."""
+        self.callback_results.append(("spot_freed", spot.spot_id))
+
+    def test_vehicle_parked_callback(self):
+        """Test that the 'vehicle_parked' callback is invoked correctly."""
+        self.lot.register_callback("vehicle_parked", self.callback_vehicle_parked)
+        self.lot.park_vehicle(self.vehicle, 1)
+        self.assertEqual(len(self.callback_results), 1)
+        event, vid, sid = self.callback_results[0]
+        self.assertEqual(event, "vehicle_parked")
+        self.assertEqual(vid, self.vehicle.vehicle_id)
+        self.assertEqual(sid, 1)
+
+    def test_vehicle_unparked_callback(self):
+        """Test that the 'vehicle_unparked' callback is invoked correctly."""
+        self.lot.register_callback("vehicle_unparked", self.callback_vehicle_unparked)
+        self.lot.park_vehicle(self.vehicle, 1)
+        self.lot.unpark_vehicle(self.vehicle.vehicle_id)
+        self.assertEqual(len(self.callback_results), 1)
+        event, vid, sid = self.callback_results[0]
+        self.assertEqual(event, "vehicle_unparked")
+        self.assertEqual(vid, self.vehicle.vehicle_id)
+        self.assertEqual(sid, 1)
+
+    def test_spot_freed_callback(self):
+        """Test that the 'spot_freed' callback is invoked correctly."""
+        self.lot.register_callback("spot_freed", self.callback_spot_freed)
+        self.lot.park_vehicle(self.vehicle, 1)
+        self.lot.release_spot(1)
+        self.assertEqual(len(self.callback_results), 1)
+        event, sid = self.callback_results[0]
+        self.assertEqual(event, "spot_freed")
+        self.assertEqual(sid, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
